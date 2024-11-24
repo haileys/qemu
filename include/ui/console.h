@@ -475,6 +475,11 @@ int qemu_console_get_window_id(QemuConsole *con);
 /* Set the low-level window id for the console */
 void qemu_console_set_window_id(QemuConsole *con, int window_id);
 
+#ifdef CONFIG_SPICE
+void qemu_console_set_spice_active(QemuConsole *con);
+void qemu_console_set_spice_idle(QemuConsole *con);
+#endif
+
 void console_select(unsigned int index);
 void qemu_console_resize(QemuConsole *con, int width, int height);
 DisplaySurface *qemu_console_surface(QemuConsole *con);

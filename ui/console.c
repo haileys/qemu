@@ -131,6 +131,7 @@ struct DisplayState {
     QEMUTimer *gui_timer;
     uint64_t last_update;
     uint64_t update_interval;
+    bool spice_idle;
     bool refreshing;
     bool have_gfx;
     bool have_text;
@@ -165,13 +166,16 @@ static void gui_update(void *opaque)
     dpy_refresh(ds);
     ds->refreshing = false;
 
-    QLIST_FOREACH(dcl, &ds->listeners, next) {
-        dcl_interval = dcl->update_interval ?
-            dcl->update_interval : GUI_REFRESH_INTERVAL_DEFAULT;
-        if (interval > dcl_interval) {
-            interval = dcl_interval;
+    if (!ds->spice_idle) {
+        QLIST_FOREACH(dcl, &ds->listeners, next) {
+            dcl_interval = dcl->update_interval ?
+                dcl->update_interval : GUI_REFRESH_INTERVAL_DEFAULT;
+            if (interval > dcl_interval) {
+                interval = dcl_interval;
+            }
         }
     }
+
     if (ds->update_interval != interval) {
         ds->update_interval = interval;
         trace_console_refresh(interval);
@@ -277,6 +281,18 @@ void qemu_console_set_window_id(QemuConsole *con, int window_id)
 {
     con->window_id = window_id;
 }
+
+#ifdef CONFIG_SPICE
+void qemu_console_set_spice_active(QemuConsole *con)
+{
+    con->ds->spice_idle = false;
+}
+
+void qemu_console_set_spice_idle(QemuConsole *con)
+{
+    con->ds->spice_idle = true;
+}
+#endif
 
 void graphic_hw_invalidate(QemuConsole *con)
 {

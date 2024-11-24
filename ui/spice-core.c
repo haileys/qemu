@@ -49,6 +49,7 @@ static time_t auth_expires = TIME_MAX;
 static int spice_migration_completed;
 static int spice_display_is_running;
 static int spice_have_target_host;
+static GSList *spice_consoles;
 
 static QemuThread me;
 
@@ -184,6 +185,37 @@ static void add_channel_info(SpiceChannel *sc, SpiceChannelEventInfo *info)
     sc->tls = !!tls;
 }
 
+static void set_spice_consoles_active(void)
+{
+    GSList *item;
+    for (item = spice_consoles; item; item = item->next) {
+        QemuConsole *con = item->data;
+        qemu_console_set_spice_active(con);
+    }
+}
+
+static void set_spice_consoles_idle(void)
+{
+    GSList *item;
+    for (item = spice_consoles; item; item = item->next) {
+        QemuConsole *con = item->data;
+        qemu_console_set_spice_idle(con);
+    }
+}
+
+static bool display_channel_connected(void)
+{
+    ChannelList *item;
+
+    QTAILQ_FOREACH(item, &channel_list, link) {
+        if (item->info->type == SPICE_CHANNEL_DISPLAY) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 static void channel_event(int event, SpiceChannelEventInfo *info)
 {
     SpiceServerInfo *server = g_malloc0(sizeof(*server));
@@ -228,11 +260,17 @@ static void channel_event(int event, SpiceChannelEventInfo *info)
         add_channel_info(client, info);
         channel_list_add(info);
         qapi_event_send_spice_initialized(server, client);
+        if (info->type == SPICE_CHANNEL_DISPLAY) {
+            set_spice_consoles_active();
+        }
         break;
     case SPICE_CHANNEL_EVENT_DISCONNECTED:
         channel_list_del(info);
         qapi_event_send_spice_disconnected(qapi_SpiceServerInfo_base(server),
                                            qapi_SpiceChannel_base(client));
+        if (!display_channel_connected()) {
+            set_spice_consoles_idle();
+        }
         break;
     default:
         break;
@@ -873,8 +911,6 @@ static int qemu_spice_add_interface(SpiceBaseInstance *sin)
 
     return spice_server_add_interface(spice_server, sin);
 }
-
-static GSList *spice_consoles;
 
 bool qemu_spice_have_display_interface(QemuConsole *con)
 {
